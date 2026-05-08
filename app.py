@@ -319,5 +319,28 @@ def routines():
         finally:
             conn.close()
 
+@app.route('/routines/delete/<int:r_id>', methods=['DELETE'])
+@login_required
+def delete_routines(r_id):
+    user_id = session['user_id']
+    conn = get_db_connection()
+    
+    try:
+        cursor = conn.execute('''
+            DELETE FROM inventory_and_routines 
+            WHERE id = ? AND pet_id IN (SELECT id FROM pets WHERE user_id = ?)
+        ''', (r_id, user_id))
+
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Silinecek kayıt bulunamadı veya bu kaydı silme yetkiniz yok!"}), 404
+            
+        conn.commit() 
+        return jsonify({"message": "Rutin/Stok kaydı başarıyla silindi!"}), 200
+        
+    except Exception as e:
+        return jsonify({"error": "Silme işlemi sırasında sunucuda bir hata oluştu!"}), 500
+    finally:
+        conn.close()
+
 if __name__ == '__main__':
     app.run(debug=True)
