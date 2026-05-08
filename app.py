@@ -252,5 +252,72 @@ def get_routines(pet_id):
     finally:
         conn.close()
 
+@app.route('/routines', methods=['POST', 'PUT'])
+@login_required
+def routines():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "JSON verisi bulunamadı"}), 400
+        
+    user_id = session['user_id']
+    conn = get_db_connection()
+
+    if request.method == 'POST':
+        pet_id = data.get('pet_id')
+        item_type = data.get('item_type')
+        total_amount = data.get('total_amount') 
+        action_date = data.get('action_date')
+        routine_date = data.get('routine_date')
+
+        if not pet_id or not item_type:
+            return jsonify({"error": "pet_id ve item_type alanları zorunludur!"}), 400
+
+        try:
+            pet_check = conn.execute('SELECT id FROM pets WHERE id = ? AND user_id = ?', (pet_id, user_id)).fetchone()
+            
+            if not pet_check:
+                return jsonify({"error": "Bu evcil hayvan size ait değil veya bulunamadı!"}), 403
+
+            conn.execute('''
+                INSERT INTO inventory_and_routines (pet_id, item_type, total_amount, action_date, routine_date) 
+                VALUES (?,?,?,?,?)
+            ''', (pet_id, item_type, total_amount, action_date, routine_date))
+            
+            conn.commit()
+            return jsonify({"message": "Kayıt başarıyla eklendi!"}), 201
+            
+        except Exception as e:
+            return jsonify({"error": "Kayıt sırasında bir hata oluştu!"}), 500
+        finally:
+            conn.close()
+
+    if request.method == 'PUT':
+        routine_id = data.get('id') 
+        item_type = data.get('item_type')
+        total_amount = data.get('total_amount')
+        action_date = data.get('action_date')
+        routine_date = data.get('routine_date')
+
+        if not routine_id:
+            return jsonify({"error": "Güncellenecek kaydın ID'si (id) gereklidir!"}), 400
+
+        try:
+            cursor = conn.execute('''
+                UPDATE inventory_and_routines 
+                SET item_type = ?, total_amount = ?, action_date = ?, routine_date = ?
+                WHERE id = ? AND pet_id IN (SELECT id FROM pets WHERE user_id = ?)
+            ''', (item_type, total_amount, action_date, routine_date, routine_id, user_id))
+
+            if cursor.rowcount == 0:
+                return jsonify({"error": "Kayıt bulunamadı veya bu kaydı güncelleme yetkiniz yok!"}), 404
+
+            conn.commit()
+            return jsonify({"message": "Kayıt başarıyla güncellendi!"}), 200
+            
+        except Exception as e:
+            return jsonify({"error": "Güncelleme sırasında bir hata oluştu!"}), 500
+        finally:
+            conn.close()
+
 if __name__ == '__main__':
     app.run(debug=True)
