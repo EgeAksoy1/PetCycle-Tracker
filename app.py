@@ -124,7 +124,37 @@ def dashboard():
     pets_list = [dict(pet) for pet in pets]
     return jsonify({"username": username, "pets": pets_list}), 200
 
-@app.route('/pets', methods=['GET', 'POST'])
+@app.route('/delete-pet', methods=['DELETE'])
+@login_required
+def delete_pet():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "JSON verisi bulunamadı"}), 400
+        
+    pet_id = data.get('id')
+    user_id = session['user_id'] 
+
+    if not pet_id:
+        return jsonify({"error": "Silinecek evcil hayvanın ID'si (id) gereklidir!"}), 400
+
+    conn = get_db_connection()
+    try:
+
+        cursor = conn.execute('DELETE FROM pets WHERE id = ? AND user_id = ?', (pet_id, user_id))
+
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Kayıt bulunamadı veya bu evcil hayvanı silme yetkiniz yok!"}), 404
+            
+        conn.commit() 
+        return jsonify({"message": "Evcil hayvan başarıyla silindi!"}), 200
+        
+    except Exception as e:
+        return jsonify({"error": "Silme işlemi sırasında sunucuda bir hata oluştu!"}), 500
+    finally:
+        conn.close() 
+
+
+@app.route('/pets', methods=['GET', 'POST', 'PUT'])
 @login_required
 def pets():
     if request.method == 'GET':
@@ -159,6 +189,44 @@ def pets():
             return jsonify({"message": "Evcil hayvan başarıyla eklendi!"}), 201
         except:
             return jsonify({"error": "Kayıt sırasında bir hata oluştu!"}), 500
+        finally:
+            conn.close()
+    if request.method == 'PUT':
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "JSON verisi bulunamadı"}), 400
+            
+        user_id = session['user_id']
+        pet_id = data.get('id') 
+        name = data.get('name')
+        species = data.get('species')
+
+        if not pet_id:
+            return jsonify({"error": "Güncellenecek evcil hayvanın ID'si (id) gereklidir!"}), 400
+
+        try:
+            dailyfoodgram = int(data.get('daily_food_gram'))
+        except (ValueError, TypeError):
+            return jsonify({"error": "Lütfen geçerli bir sayı girin!"}), 400
+
+        if dailyfoodgram <= 0:
+            return jsonify({"error": "Günlük mama miktarı 0'dan büyük olmalıdır!"}), 400
+            
+        conn = get_db_connection()
+        try:
+            cursor = conn.execute('''
+                UPDATE pets 
+                SET name = ?, species = ?, daily_food_gram = ?
+                WHERE id = ? AND user_id = ?
+            ''', (name, species, dailyfoodgram, pet_id, user_id))
+
+            if cursor.rowcount == 0:
+                return jsonify({"error": "Kayıt bulunamadı veya bu evcil hayvanı güncelleme yetkiniz yok!"}), 404
+
+            conn.commit()
+            return jsonify({"message": "Evcil hayvan başarıyla güncellendi!"}), 200 
+        except Exception as e:
+            return jsonify({"error": "Güncelleme sırasında bir hata oluştu!"}), 500
         finally:
             conn.close()
 
