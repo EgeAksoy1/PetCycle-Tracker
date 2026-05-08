@@ -36,8 +36,9 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             pet_id INTEGER NOT NULL,
             item_type TEXT NOT NULL,
-            total_amount INTEGER NOT NULL,
+            total_amount INTEGER, 
             action_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            routine_date DATE,
             FOREIGN KEY (pet_id) REFERENCES pets (id)
         )
     ''')
@@ -229,6 +230,27 @@ def pets():
             return jsonify({"error": "Güncelleme sırasında bir hata oluştu!"}), 500
         finally:
             conn.close()
+
+@app.route('/routines/<int:pet_id>', methods=['GET'])
+@login_required
+def get_routines(pet_id):
+  
+    user_id = session['user_id']
+    
+    conn = get_db_connection()
+    try:
+        routines = conn.execute('''
+            SELECT ir.* FROM inventory_and_routines ir
+            JOIN pets p ON ir.pet_id = p.id
+            WHERE ir.pet_id = ? AND p.user_id = ?
+        ''', (pet_id, user_id)).fetchall()
+        
+        return jsonify([dict(routine) for routine in routines]), 200
+        
+    except Exception as e:
+        return jsonify({"error": "Kayıtlar getirilirken bir hata oluştu!"}), 500
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     app.run(debug=True)
