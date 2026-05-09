@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import sqlite3
 from functools import wraps
+from datetime import date, datetime
 
 app = Flask(__name__)
 app.secret_key = 'petcycle-super-secret-key'
@@ -35,10 +36,11 @@ def init_db():
         CREATE TABLE IF NOT EXISTS inventory_and_routines (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             pet_id INTEGER NOT NULL,
-            item_type TEXT NOT NULL,
-            total_amount INTEGER, 
-            action_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            routine_date DATE,
+            item_type TEXT NOT NULL, 
+            total_amount INTEGER,     
+            interval_days INTEGER,      
+            next_due_date DATE,       
+            last_action_date DATE DEFAULT (date('now', 'localtime')),
             FOREIGN KEY (pet_id) REFERENCES pets (id)
         )
     ''')
@@ -119,12 +121,40 @@ def dashboard():
     username = session['username']
     
     conn = get_db_connection()
+
     pets = conn.execute('SELECT * FROM pets WHERE user_id = ?', (user_id,)).fetchall()
+
+    items = conn.execute('''
+        SELECT ir.*, p.name as pet_name 
+        FROM inventory_and_routines ir
+        JOIN pets p ON ir.pet_id = p.id
+        WHERE p.user_id = ?
+    ''', (user_id,)).fetchall()
+    
     conn.close()
 
-    pets_list = [dict(pet) for pet in pets]
-    return jsonify({"username": username, "pets": pets_list}), 200
+    today = date.today()
+    processed_items = []
 
+    for item in items:
+        item_data = dict(item)
+
+        if item['next_due_date']:
+            target_date = datetime.strptime(item['next_due_date'], '%Y-%m-%d').date()
+            delta = (target_date - today).days
+            item_data['days_left'] = delta
+        else:
+            item_data['days_left'] = None
+
+        processed_items.append(item_data)
+
+    return render_template(
+        'dashboard.html', 
+        username=username, 
+        pets=pets, 
+        items=processed_items, 
+        today=today.strftime('%Y-%m-%d')
+    )
 @app.route('/delete-pet', methods=['DELETE'])
 @login_required
 def delete_pet():
