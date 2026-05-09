@@ -121,11 +121,10 @@ def dashboard():
     username = session['username']
     
     conn = get_db_connection()
-
     pets = conn.execute('SELECT * FROM pets WHERE user_id = ?', (user_id,)).fetchall()
 
     items = conn.execute('''
-        SELECT ir.*, p.name as pet_name 
+        SELECT ir.*, p.name as pet_name, p.daily_food_gram 
         FROM inventory_and_routines ir
         JOIN pets p ON ir.pet_id = p.id
         WHERE p.user_id = ?
@@ -139,22 +138,36 @@ def dashboard():
     for item in items:
         item_data = dict(item)
 
-        if item['next_due_date']:
-            target_date = datetime.strptime(item['next_due_date'], '%Y-%m-%d').date()
-            delta = (target_date - today).days
-            item_data['days_left'] = delta
-        else:
-            item_data['days_left'] = None
+        if item_data['item_type'] == 'Mama' and item_data['total_amount'] is not None:
+            action_date_str = item_data['action_date'][:10] 
+            action_date = datetime.strptime(action_date_str, '%Y-%m-%d').date()
+
+            days_passed = (today - action_date).days
+            if days_passed < 0:
+                days_passed = 0 
+
+            consumed_amount = days_passed * item_data['daily_food_gram']
+            remaining_amount = item_data['total_amount'] - consumed_amount
+
+            if remaining_amount < 0:
+                remaining_amount = 0
+
+            if item_data['daily_food_gram'] > 0:
+                remaining_days = remaining_amount // item_data['daily_food_gram']
+            else:
+                remaining_days = 0
+
+            item_data['calculated_remaining_amount'] = remaining_amount
+            item_data['food_remaining_days'] = remaining_days
+            item_data['days_left'] = None 
+
+        elif item_data['next_due_date']:
+            target_date = datetime.strptime(item_data['next_due_date'], '%Y-%m-%d').date()
+            item_data['days_left'] = (target_date - today).days
 
         processed_items.append(item_data)
 
-    return render_template(
-        'dashboard.html', 
-        username=username, 
-        pets=pets, 
-        items=processed_items, 
-        today=today.strftime('%Y-%m-%d')
-    )
+    return render_template('dashboard.html', username=username, pets=pets, items=processed_items)
 @app.route('/delete-pet', methods=['DELETE'])
 @login_required
 def delete_pet():
