@@ -322,9 +322,10 @@ def add_routine():
     total_amount = request.form.get('total_amount') or None
     interval_days = request.form.get('interval_days') or None
 
-    if total_amount is None or interval_days is None:
-        flash('hata')
-        return redirect(url_for('pets'))
+    if item_type == 'Mama' or item_type == 'İlaç':
+        if total_amount is None or interval_days is None:
+            flash('hata')
+            return redirect(url_for('pets'))
     
     last_action_date = request.form.get('last_action_date') or None  
 
@@ -339,11 +340,15 @@ def add_routine():
             if last_action_date:
                 base_date = datetime.strptime(last_action_date, '%Y-%m-%d').date()
             else:
-                base_date = date.today()  # DB default ile aynı mantık
+                base_date = date.today() 
             next_due_date = (base_date + __import__('datetime').timedelta(days=interval_days)).strftime('%Y-%m-%d')
         except (ValueError, TypeError):
             flash('Geçersiz aralık değeri!', 'danger')
             return redirect(url_for('get_routines', pet_id=pet_id))
+    
+    
+    if last_action_date is None:
+        last_action_date = date.today()
 
     conn = get_db_connection()
     try:
