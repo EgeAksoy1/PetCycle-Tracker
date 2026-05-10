@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import sqlite3
 from functools import wraps
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 app = Flask(__name__)
 app.secret_key = 'petcycle-super-secret-key'
@@ -36,10 +36,10 @@ def init_db():
         CREATE TABLE IF NOT EXISTS inventory_and_routines (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             pet_id INTEGER NOT NULL,
-            item_type TEXT NOT NULL, 
-            total_amount INTEGER,     
-            interval_days INTEGER,      
-            next_due_date DATE,       
+            item_type TEXT NOT NULL,
+            total_amount INTEGER,
+            interval_days INTEGER,
+            next_due_date DATE,
             last_action_date DATE DEFAULT (date('now', 'localtime')),
             FOREIGN KEY (pet_id) REFERENCES pets (id)
         )
@@ -49,13 +49,20 @@ def init_db():
 
 init_db()
 
+@app.context_processor
+def inject_now():
+    return {'now': datetime.now()}
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
-            return jsonify({"error": "Lütfen önce giriş yapın."}), 401
+            flash('Lütfen önce giriş yapın.', 'warning')
+            return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
+
+# ─── AUTH ────────────────────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
@@ -66,36 +73,34 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "JSON verisi bulunamadı"}), 400
-        
-        username = data.get('username')
-        password = data.get('password')
-        
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+
+        if not username or not password:
+            flash('Kullanıcı adı ve şifre boş bırakılamaz.', 'danger')
+            return redirect(url_for('register'))
+
         conn = get_db_connection()
         try:
-            conn.execute('INSERT INTO users (username, password) VALUES (?, ?)', 
+            conn.execute('INSERT INTO users (username, password) VALUES (?, ?)',
                          (username, password))
             conn.commit()
-            return jsonify({"message": "Kayıt başarılı!"}), 201
+            flash('Kayıt başarılı! Giriş yapabilirsiniz.', 'success')
+            return redirect(url_for('login'))
         except sqlite3.IntegrityError:
-            return jsonify({"error": "Bu kullanıcı adı zaten alınmış."}), 409
+            flash('Bu kullanıcı adı zaten alınmış.', 'danger')
+            return redirect(url_for('register'))
         finally:
             conn.close()
-            
+
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "JSON verisi bulunamadı"}), 400
-            
-        username = data.get('username')
-        password = data.get('password')
-        
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+
         conn = get_db_connection()
         user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         conn.close()
@@ -103,33 +108,38 @@ def login():
         if user and user['password'] == password:
             session['user_id'] = user['id']
             session['username'] = user['username']
-            return jsonify({"message": "Giriş başarılı!", "username": user['username']}), 200
+            flash(f'Hoş geldin, {user["username"]}!', 'success')
+            return redirect(url_for('dashboard'))
         else:
-            return jsonify({"error": "Hatalı kullanıcı adı veya şifre."}), 401
-            
+            flash('Hatalı kullanıcı adı veya şifre.', 'danger')
+            return redirect(url_for('login'))
+
     return render_template('login.html')
 
 @app.route('/logout')
 def logout():
     session.clear()
-    return jsonify({"message": "Oturum kapatıldı."}), 200
+    flash('Oturum kapatıldı.', 'info')
+    return redirect(url_for('login'))
+
+# ─── DASHBOARD ───────────────────────────────────────────────────────────────
 
 @app.route('/dashboard')
 @login_required
 def dashboard():
     user_id = session['user_id']
     username = session['username']
-    
+
     conn = get_db_connection()
     pets = conn.execute('SELECT * FROM pets WHERE user_id = ?', (user_id,)).fetchall()
 
     items = conn.execute('''
-        SELECT ir.*, p.name as pet_name, p.daily_food_gram 
+        SELECT ir.*, p.name as pet_name, p.daily_food_gram
         FROM inventory_and_routines ir
         JOIN pets p ON ir.pet_id = p.id
         WHERE p.user_id = ?
     ''', (user_id,)).fetchall()
-    
+
     conn.close()
 
     today = date.today()
@@ -139,27 +149,19 @@ def dashboard():
         item_data = dict(item)
 
         if item_data['item_type'] == 'Mama' and item_data['total_amount'] is not None:
-            action_date_str = item_data['action_date'][:10] 
+            action_date_str = item_data['last_action_date'][:10]
             action_date = datetime.strptime(action_date_str, '%Y-%m-%d').date()
 
-            days_passed = (today - action_date).days
-            if days_passed < 0:
-                days_passed = 0 
-
+            days_passed = max((today - action_date).days, 0)
             consumed_amount = days_passed * item_data['daily_food_gram']
-            remaining_amount = item_data['total_amount'] - consumed_amount
+            remaining_amount = max(item_data['total_amount'] - consumed_amount, 0)
 
-            if remaining_amount < 0:
-                remaining_amount = 0
-
-            if item_data['daily_food_gram'] > 0:
-                remaining_days = remaining_amount // item_data['daily_food_gram']
-            else:
-                remaining_days = 0
+            daily = item_data['daily_food_gram']
+            remaining_days = remaining_amount // daily if daily > 0 else 0
 
             item_data['calculated_remaining_amount'] = remaining_amount
             item_data['food_remaining_days'] = remaining_days
-            item_data['days_left'] = None 
+            item_data['days_left'] = None
 
         elif item_data['next_due_date']:
             target_date = datetime.strptime(item_data['next_due_date'], '%Y-%m-%d').date()
@@ -168,222 +170,308 @@ def dashboard():
         processed_items.append(item_data)
 
     return render_template('dashboard.html', username=username, pets=pets, items=processed_items)
-@app.route('/delete-pet', methods=['DELETE'])
-@login_required
-def delete_pet():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "JSON verisi bulunamadı"}), 400
-        
-    pet_id = data.get('id')
-    user_id = session['user_id'] 
 
-    if not pet_id:
-        return jsonify({"error": "Silinecek evcil hayvanın ID'si (id) gereklidir!"}), 400
+# ─── PETS ────────────────────────────────────────────────────────────────────
+
+@app.route('/pets', methods=['GET', 'POST'])
+@login_required
+def pets():
+    user_id = session['user_id']
+
+    if request.method == 'GET':
+
+        conn = get_db_connection()
+        rows = conn.execute('SELECT * FROM pets WHERE user_id = ?', (user_id,)).fetchall()
+        conn.close()
+        return render_template('pets.html', pets=rows)
+
+    # POST – yeni evcil hayvan ekle
+    name = request.form.get('name', '').strip()
+    species = request.form.get('species', '').strip()
+
+    try:
+        dailyfoodgram = int(request.form.get('daily_food_gram', 0))
+    except ValueError:
+        flash('Lütfen geçerli bir sayı girin!', 'danger')
+        return redirect(url_for('pets'))
+
+    if dailyfoodgram <= 0:
+        flash('Günlük mama miktarı 0\'dan büyük olmalıdır!', 'danger')
+        return redirect(url_for('pets'))
 
     conn = get_db_connection()
     try:
+        conn.execute('INSERT INTO pets (user_id, name, species, daily_food_gram) VALUES (?,?,?,?)',
+                     (user_id, name, species, dailyfoodgram))
+        conn.commit()
+        flash('Evcil hayvan başarıyla eklendi!', 'success')
+    except Exception:
+        flash('Kayıt sırasında bir hata oluştu!', 'danger')
+    finally:
+        conn.close()
 
-        cursor = conn.execute('DELETE FROM pets WHERE id = ? AND user_id = ?', (pet_id, user_id))
+    return redirect(url_for('pets'))
+
+@app.route('/pets/<int:pet_id>/edit', methods=['POST'])
+@login_required
+def edit_pet(pet_id):
+    """PUT yerine POST + gizli _method alanı kullanılır."""
+    user_id = session['user_id']
+    name = request.form.get('name', '').strip()
+    species = request.form.get('species', '').strip()
+
+    try:
+        dailyfoodgram = int(request.form.get('daily_food_gram', 0))
+    except ValueError:
+        flash('Lütfen geçerli bir sayı girin!', 'danger')
+        return redirect(url_for('pets'))
+
+    if dailyfoodgram <= 0:
+        flash('Günlük mama miktarı 0\'dan büyük olmalıdır!', 'danger')
+        return redirect(url_for('pets'))
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute('''
+            UPDATE pets SET name = ?, species = ?, daily_food_gram = ?
+            WHERE id = ? AND user_id = ?
+        ''', (name, species, dailyfoodgram, pet_id, user_id))
 
         if cursor.rowcount == 0:
-            return jsonify({"error": "Kayıt bulunamadı veya bu evcil hayvanı silme yetkiniz yok!"}), 404
-            
-        conn.commit() 
-        return jsonify({"message": "Evcil hayvan başarıyla silindi!"}), 200
-        
-    except Exception as e:
-        return jsonify({"error": "Silme işlemi sırasında sunucuda bir hata oluştu!"}), 500
+            flash('Kayıt bulunamadı veya yetkiniz yok!', 'danger')
+        else:
+            conn.commit()
+            flash('Evcil hayvan başarıyla güncellendi!', 'success')
+    except Exception:
+        flash('Güncelleme sırasında bir hata oluştu!', 'danger')
     finally:
-        conn.close() 
-
-
-@app.route('/pets', methods=['GET', 'POST', 'PUT'])
-@login_required
-def pets():
-    if request.method == 'GET':
-        user_id = session['user_id']
-        conn = get_db_connection()
-        pets = conn.execute('SELECT * FROM pets WHERE user_id = ?', (user_id,)).fetchall()
         conn.close()
-        return jsonify([dict(pet) for pet in pets]), 200
 
-    if request.method == 'POST':
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "JSON verisi bulunamadı"}), 400
-            
-        user_id = session['user_id']
-        name = data.get('name')
-        species = data.get('species')
+    return redirect(url_for('pets'))
 
-        try:
-            dailyfoodgram = int(data.get('daily_food_gram'))
-        except (ValueError, TypeError):
-            return jsonify({"error": "Lütfen geçerli bir sayı girin!"}), 400
+@app.route('/pets/<int:pet_id>/delete', methods=['POST'])
+@login_required
+def delete_pet(pet_id):
+    user_id = session['user_id']
+    conn = get_db_connection()
+    try:
+        # Önce bağlı rutinleri sil
+        conn.execute('''
+            DELETE FROM inventory_and_routines WHERE pet_id = ?
+            AND pet_id IN (SELECT id FROM pets WHERE user_id = ?)
+        ''', (pet_id, user_id))
 
-        if dailyfoodgram <= 0:
-            return jsonify({"error": "Günlük mama miktarı 0'dan büyük olmalıdır!"}), 400
-            
-        conn = get_db_connection()
-        try:
-            conn.execute('INSERT INTO pets (user_id, name, species, daily_food_gram) VALUES (?,?,?,?)', 
-                         (user_id, name, species, dailyfoodgram))
+        cursor = conn.execute('DELETE FROM pets WHERE id = ? AND user_id = ?',
+                              (pet_id, user_id))
+        if cursor.rowcount == 0:
+            flash('Kayıt bulunamadı veya yetkiniz yok!', 'danger')
+        else:
             conn.commit()
-            return jsonify({"message": "Evcil hayvan başarıyla eklendi!"}), 201
-        except:
-            return jsonify({"error": "Kayıt sırasında bir hata oluştu!"}), 500
-        finally:
-            conn.close()
-    if request.method == 'PUT':
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "JSON verisi bulunamadı"}), 400
-            
-        user_id = session['user_id']
-        pet_id = data.get('id') 
-        name = data.get('name')
-        species = data.get('species')
+            flash('Evcil hayvan başarıyla silindi!', 'success')
+    except Exception:
+        flash('Silme işlemi sırasında bir hata oluştu!', 'danger')
+    finally:
+        conn.close()
 
-        if not pet_id:
-            return jsonify({"error": "Güncellenecek evcil hayvanın ID'si (id) gereklidir!"}), 400
+    return redirect(url_for('pets'))
 
-        try:
-            dailyfoodgram = int(data.get('daily_food_gram'))
-        except (ValueError, TypeError):
-            return jsonify({"error": "Lütfen geçerli bir sayı girin!"}), 400
-
-        if dailyfoodgram <= 0:
-            return jsonify({"error": "Günlük mama miktarı 0'dan büyük olmalıdır!"}), 400
-            
-        conn = get_db_connection()
-        try:
-            cursor = conn.execute('''
-                UPDATE pets 
-                SET name = ?, species = ?, daily_food_gram = ?
-                WHERE id = ? AND user_id = ?
-            ''', (name, species, dailyfoodgram, pet_id, user_id))
-
-            if cursor.rowcount == 0:
-                return jsonify({"error": "Kayıt bulunamadı veya bu evcil hayvanı güncelleme yetkiniz yok!"}), 404
-
-            conn.commit()
-            return jsonify({"message": "Evcil hayvan başarıyla güncellendi!"}), 200 
-        except Exception as e:
-            return jsonify({"error": "Güncelleme sırasında bir hata oluştu!"}), 500
-        finally:
-            conn.close()
+# ─── ROUTINES / INVENTORY ────────────────────────────────────────────────────
 
 @app.route('/routines/<int:pet_id>', methods=['GET'])
 @login_required
 def get_routines(pet_id):
-  
+
     user_id = session['user_id']
-    
+
     conn = get_db_connection()
     try:
+        pet = conn.execute(
+            'SELECT * FROM pets WHERE id = ? AND user_id = ?',
+            (pet_id, user_id)
+        ).fetchone()
+
+        if not pet:
+            flash('Bu evcil hayvana erişim yetkiniz yok!', 'danger')
+            return redirect(url_for('pets'))
+
         routines = conn.execute('''
             SELECT ir.* FROM inventory_and_routines ir
             JOIN pets p ON ir.pet_id = p.id
             WHERE ir.pet_id = ? AND p.user_id = ?
         ''', (pet_id, user_id)).fetchall()
-        
-        return jsonify([dict(routine) for routine in routines]), 200
-        
-    except Exception as e:
-        return jsonify({"error": "Kayıtlar getirilirken bir hata oluştu!"}), 500
+
+        today = date.today()
+        processed = []
+        for r in routines:
+            rd = dict(r)
+            if rd['next_due_date']:
+                target = datetime.strptime(rd['next_due_date'], '%Y-%m-%d').date()
+                rd['days_left'] = (target - today).days
+            else:
+                rd['days_left'] = None
+            processed.append(rd)
+
+        return render_template('routines.html', pet=pet, routines=processed)
     finally:
         conn.close()
 
-@app.route('/routines', methods=['POST', 'PUT'])
+@app.route('/routines', methods=['POST'])
 @login_required
-def routines():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "JSON verisi bulunamadı"}), 400
-        
+def add_routine():
     user_id = session['user_id']
+    pet_id = request.form.get('pet_id')
+    item_type = request.form.get('item_type', '').strip()
+    total_amount = request.form.get('total_amount') or None
+    interval_days = request.form.get('interval_days') or None
+    last_action_date = request.form.get('last_action_date') or None  # boşsa None → DB default alır
+
+    if not pet_id or not item_type:
+        flash('Tür alanı zorunludur!', 'danger')
+        return redirect(request.referrer or url_for('dashboard'))
+
+    # next_due_date otomatik hesapla
+    next_due_date = None
+    if interval_days:
+        try:
+            interval_days = int(interval_days)
+            if last_action_date:
+                base_date = datetime.strptime(last_action_date, '%Y-%m-%d').date()
+            else:
+                base_date = date.today()  # DB default ile aynı mantık
+            next_due_date = (base_date + __import__('datetime').timedelta(days=interval_days)).strftime('%Y-%m-%d')
+        except (ValueError, TypeError):
+            flash('Geçersiz aralık değeri!', 'danger')
+            return redirect(url_for('get_routines', pet_id=pet_id))
+
     conn = get_db_connection()
+    try:
+        pet_check = conn.execute(
+            'SELECT id FROM pets WHERE id = ? AND user_id = ?',
+            (pet_id, user_id)
+        ).fetchone()
 
-    if request.method == 'POST':
-        pet_id = data.get('pet_id')
-        item_type = data.get('item_type')
-        total_amount = data.get('total_amount') 
-        action_date = data.get('action_date')
-        routine_date = data.get('routine_date')
+        if not pet_check:
+            flash('Bu evcil hayvan size ait değil veya bulunamadı!', 'danger')
+            return redirect(url_for('dashboard'))
 
-        if not pet_id or not item_type:
-            return jsonify({"error": "pet_id ve item_type alanları zorunludur!"}), 400
+        conn.execute('''
+            INSERT INTO inventory_and_routines
+                (pet_id, item_type, total_amount, interval_days, next_due_date, last_action_date)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (pet_id, item_type, total_amount, interval_days, next_due_date, last_action_date))
+        conn.commit()
+        flash('Kayıt başarıyla eklendi!', 'success')
+    except Exception as e:
+        flash('Kayıt sırasında bir hata oluştu!', 'danger')
+    finally:
+        conn.close()
 
-        try:
-            pet_check = conn.execute('SELECT id FROM pets WHERE id = ? AND user_id = ?', (pet_id, user_id)).fetchone()
-            
-            if not pet_check:
-                return jsonify({"error": "Bu evcil hayvan size ait değil veya bulunamadı!"}), 403
+    return redirect(url_for('get_routines', pet_id=pet_id))
 
-            conn.execute('''
-                INSERT INTO inventory_and_routines (pet_id, item_type, total_amount, action_date, routine_date) 
-                VALUES (?,?,?,?,?)
-            ''', (pet_id, item_type, total_amount, action_date, routine_date))
-            
-            conn.commit()
-            return jsonify({"message": "Kayıt başarıyla eklendi!"}), 201
-            
-        except Exception as e:
-            return jsonify({"error": "Kayıt sırasında bir hata oluştu!"}), 500
-        finally:
-            conn.close()
-
-    if request.method == 'PUT':
-        routine_id = data.get('id') 
-        item_type = data.get('item_type')
-        total_amount = data.get('total_amount')
-        action_date = data.get('action_date')
-        routine_date = data.get('routine_date')
-
-        if not routine_id:
-            return jsonify({"error": "Güncellenecek kaydın ID'si (id) gereklidir!"}), 400
-
-        try:
-            cursor = conn.execute('''
-                UPDATE inventory_and_routines 
-                SET item_type = ?, total_amount = ?, action_date = ?, routine_date = ?
-                WHERE id = ? AND pet_id IN (SELECT id FROM pets WHERE user_id = ?)
-            ''', (item_type, total_amount, action_date, routine_date, routine_id, user_id))
-
-            if cursor.rowcount == 0:
-                return jsonify({"error": "Kayıt bulunamadı veya bu kaydı güncelleme yetkiniz yok!"}), 404
-
-            conn.commit()
-            return jsonify({"message": "Kayıt başarıyla güncellendi!"}), 200
-            
-        except Exception as e:
-            return jsonify({"error": "Güncelleme sırasında bir hata oluştu!"}), 500
-        finally:
-            conn.close()
-
-@app.route('/routines/delete/<int:r_id>', methods=['DELETE'])
+@app.route('/routines/<int:r_id>/edit', methods=['POST'])
 @login_required
-def delete_routines(r_id):
+def edit_routine(r_id):
     user_id = session['user_id']
+    pet_id  = request.form.get('pet_id')
+    is_fed  = request.form.get('is_fed')
+
+    if not pet_id:
+        flash('pet_id bulunamadı!', 'danger')
+        return redirect(url_for('dashboard'))
+
+    pet_id = int(pet_id)
+
     conn = get_db_connection()
-    
+    try:
+        routine = conn.execute('''
+            SELECT ir.* FROM inventory_and_routines ir
+            JOIN pets p ON ir.pet_id = p.id
+            WHERE ir.id = ? AND p.user_id = ?
+        ''', (r_id, user_id)).fetchone()
+
+        if not routine:
+            flash('Kayıt bulunamadı veya yetkiniz yok!', 'danger')
+            return redirect(url_for('get_routines', pet_id=pet_id))
+
+        if is_fed:
+            item_type     = routine['item_type']
+            interval_days = routine['interval_days']
+
+            pet_row = conn.execute(
+                'SELECT daily_food_gram FROM pets WHERE id = ?',
+                (routine['pet_id'],)
+            ).fetchone()
+            daily_gram = pet_row['daily_food_gram'] if pet_row else 0
+
+            old_total        = routine['total_amount'] or 0
+            new_total        = max(old_total - daily_gram, 0)
+            total_amount     = new_total
+            last_action_date = routine['last_action_date']
+            next_due_date    = routine['next_due_date']
+
+        else:
+            item_type        = request.form.get('item_type', '').strip()
+            total_amount     = request.form.get('total_amount') or None
+            interval_days    = request.form.get('interval_days') or None
+            last_action_date = request.form.get('last_action_date') or None
+
+            next_due_date = None
+            if interval_days:
+                try:
+                    interval_days = int(interval_days)
+                    base_date = (
+                        datetime.strptime(last_action_date, '%Y-%m-%d').date()
+                        if last_action_date else date.today()
+                    )
+                    next_due_date = (base_date + timedelta(days=interval_days)).strftime('%Y-%m-%d')
+                except (ValueError, TypeError):
+                    flash('Geçersiz aralık değeri!', 'danger')
+                    return redirect(url_for('get_routines', pet_id=pet_id))
+
+        cursor = conn.execute('''
+            UPDATE inventory_and_routines
+            SET item_type = ?, total_amount = ?, interval_days = ?,
+                next_due_date = ?, last_action_date = ?
+            WHERE id = ? AND pet_id IN (SELECT id FROM pets WHERE user_id = ?)
+        ''', (item_type, total_amount, interval_days, next_due_date, last_action_date, r_id, user_id))
+
+        if cursor.rowcount == 0:
+            flash('Kayıt bulunamadı veya yetkiniz yok!', 'danger')
+        else:
+            conn.commit()
+            flash('Mama verildi! Stok güncellendi.' if is_fed else 'Kayıt başarıyla güncellendi!', 'success')
+
+    except Exception as e:
+        flash(f'Güncelleme sırasında bir hata oluştu: {e}', 'danger')
+    finally:
+        conn.close()
+
+    return redirect(url_for('get_routines', pet_id=pet_id))
+
+@app.route('/routines/<int:r_id>/delete', methods=['POST'])
+@login_required
+def delete_routine(r_id):
+    user_id = session['user_id']
+    pet_id = request.form.get('pet_id')
+
+    conn = get_db_connection()
     try:
         cursor = conn.execute('''
-            DELETE FROM inventory_and_routines 
+            DELETE FROM inventory_and_routines
             WHERE id = ? AND pet_id IN (SELECT id FROM pets WHERE user_id = ?)
         ''', (r_id, user_id))
 
         if cursor.rowcount == 0:
-            return jsonify({"error": "Silinecek kayıt bulunamadı veya bu kaydı silme yetkiniz yok!"}), 404
-            
-        conn.commit() 
-        return jsonify({"message": "Rutin/Stok kaydı başarıyla silindi!"}), 200
-        
-    except Exception as e:
-        return jsonify({"error": "Silme işlemi sırasında sunucuda bir hata oluştu!"}), 500
+            flash('Silinecek kayıt bulunamadı veya yetkiniz yok!', 'danger')
+        else:
+            conn.commit()
+            flash('Kayıt başarıyla silindi!', 'success')
+    except Exception:
+        flash('Silme işlemi sırasında bir hata oluştu!', 'danger')
     finally:
         conn.close()
+
+    return redirect(url_for('get_routines', pet_id=pet_id) if pet_id else url_for('dashboard'))
 
 if __name__ == '__main__':
     app.run(debug=True)

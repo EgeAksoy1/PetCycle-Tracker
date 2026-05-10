@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+{% block title %}{{ pet.name }} — Rutinler{% endblock %}
+
+{% block extra_styles %}
+.routine-header {
+    background: linear-gradient(120deg, var(--earth), var(--bark));
+    border-radius: var(--radius-lg);
+    padding: 1.75rem 2rem;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+}
+
+.routine-header h1 {
+    font-family: var(--font-display);
+    font-size: 1.7rem;
+    font-weight: 600;
+}
+
+.routine-header p {
+    opacity: .7;
+    font-size: .875rem;
+    margin-top: .25rem;
+}
+
+.routine-header .back-btn {
+    background: rgba(255,255,255,.15);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.25);
+    text-decoration: none;
+    padding: .5rem 1rem;
+    border-radius: var(--radius);
+    font-size: .85rem;
+    font-weight: 500;
+    transition: background .18s;
+    white-space: nowrap;
+}
+
+.routine-header .back-btn:hover {
+    background: rgba(255,255,255,.28);
+}
+
+.add-section {
+    background: #fff;
+    border: 1px solid var(--warm);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 1.75rem;
+    margin-bottom: 2rem;
+}
+
+.add-section h2 {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--bark);
+    margin-bottom: 1.25rem;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+}
+
+.form-grid-wide {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 1rem;
+    margin-top: 1rem;
+    align-items: flex-end;
+}
+
+@media (max-width: 750px) {
+    .form-grid,
+    .form-grid-wide { grid-template-columns: 1fr; }
+    .routine-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+}
+
+.field-hint {
+    font-size: .72rem;
+    color: var(--muted);
+    margin-top: .3rem;
+}
+
+.routine-list {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+}
+
+.routine-row {
+    background: #fff;
+    border: 1px solid var(--warm);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transition: box-shadow .18s;
+}
+
+.routine-row:hover { box-shadow: var(--shadow-lg); }
+
+.routine-row-main {
+    padding: 1.1rem 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.routine-info {
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    flex: 1;
+}
+
+.routine-type-label {
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.routine-meta {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    margin-top: .3rem;
+}
+
+.routine-meta-item {
+    font-size: .82rem;
+    color: var(--muted);
+}
+
+.routine-meta-item strong {
+    color: var(--earth);
+}
+
+.routine-actions {
+    display: flex;
+    gap: .5rem;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+.days-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 64px;
+    text-align: center;
+}
+
+.days-chip .num {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.days-chip .lbl {
+    font-size: .65rem;
+    color: var(--muted);
+    white-space: nowrap;
+    margin-top: .15rem;
+}
+
+.day-ok     { color: var(--sage); }
+.day-warn   { color: var(--clay); }
+.day-danger { color: var(--blush); }
+
+.edit-toggle { display: none; }
+
+.routine-edit-wrapper {
+    display: none;
+    background: var(--cream);
+    border-top: 1px solid var(--warm);
+    padding: 1.25rem 1.4rem;
+}
+
+.edit-toggle:checked ~ .routine-edit-wrapper {
+    display: block;
+}
+{% endblock %}
+
+{% block content %}
+
+<!-- HEADER -->
+<div class="routine-header">
+    <div>
+        <h1>🐾 {{ pet.name }}</h1>
+        <p>{{ pet.species }} &mdash; Günlük {{ pet.daily_food_gram }} g mama</p>
+    </div>
+    <a href="{{ url_for('pets') }}" class="back-btn">← Hayvanlara Dön</a>
+</div>
+
+<!-- ADD FORM -->
+<div class="add-section">
+    <h2>➕ Yeni Kayıt Ekle</h2>
+    <form method="POST" action="{{ url_for('add_routine') }}">
+        <input type="hidden" name="pet_id" value="{{ pet.id }}">
+
+        <div class="form-grid">
+            <div class="form-group" style="margin-bottom:0">
+                <label for="item_type">Tür</label>
+                <select id="item_type" name="item_type" required>
+                    <option value="" disabled selected>Seçin…</option>
+                    <option value="Mama">🥣 Mama</option>
+                    <option value="Veteriner">🏥 Veteriner</option>
+                    <option value="Aşı">💉 Aşı</option>
+                    <option value="Tırnak">✂️ Tırnak Kesimi</option>
+                    <option value="Banyo">🛁 Banyo</option>
+                    <option value="İlaç">💊 İlaç</option>
+                    <option value="Diğer">📌 Diğer</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0">
+                <label for="total_amount">
+                    Toplam Miktar (g)
+                    <span style="font-size:.7rem;text-transform:none;letter-spacing:0">— Mama için</span>
+                </label>
+                <input type="number" id="total_amount" name="total_amount" placeholder="5000" min="1">
+                <p class="field-hint">Sadece mama kaydı için doldurun.</p>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0">
+                <label for="last_action_date">Son İşlem Tarihi</label>
+                <input type="date" id="last_action_date" name="last_action_date">
+                <p class="field-hint">Boş bırakılırsa bugün kabul edilir.</p>
+            </div>
+        </div>
+
+        <div class="form-grid-wide">
+            <div class="form-group" style="margin-bottom:0">
+                <label for="interval_days">Tekrar Aralığı (gün)</label>
+                <input type="number" id="interval_days" name="interval_days" placeholder="30" min="1">
+                <p class="field-hint">Girilirse sonraki tarih otomatik hesaplanır.</p>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0">
+                <label>Sonraki Tarih</label>
+                <input type="text" disabled placeholder="Otomatik hesaplanır" style="opacity:.5;cursor:not-allowed">
+                <p class="field-hint">Aralık girilince otomatik belirlenir.</p>
+            </div>
+
+            <div></div>
+
+            <div>
+                <button type="submit" class="btn btn-primary w-full">Kaydet</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- ROUTINE LIST -->
+{% if routines %}
+<div class="routine-list">
+    {% for r in routines %}
+
+    <div class="routine-row">
+        <!-- CSS toggle: checkbox önce, edit-wrapper sonra kardeş olmalı -->
+        <input type="checkbox" class="edit-toggle" id="rt-toggle-{{ r.id }}">
+
+        <div class="routine-row-main">
+            <div class="routine-info">
+                <span class="routine-type-label">
+                    {% if r.item_type == 'Mama' %}🥣
+                    {% elif r.item_type == 'Veteriner' %}🏥
+                    {% elif r.item_type == 'Aşı' %}💉
+                    {% elif r.item_type == 'Tırnak' %}✂️
+                    {% elif r.item_type == 'Banyo' %}🛁
+                    {% elif r.item_type == 'İlaç' %}💊
+                    {% else %}📌{% endif %}
+                    {{ r.item_type }}
+                </span>
+
+                <div class="routine-meta">
+                    {% if r.total_amount %}
+                    <span class="routine-meta-item">
+                        📦 Stok: <strong>{{ r.total_amount }} g</strong>
+                    </span>
+                    {% endif %}
+
+                    {% if r.last_action_date %}
+                    <span class="routine-meta-item">
+                        📅 Son işlem: <strong>{{ r.last_action_date[:10] }}</strong>
+                    </span>
+                    {% endif %}
+
+                    {% if r.interval_days %}
+                    <span class="routine-meta-item">
+                        🔁 Her <strong>{{ r.interval_days }} günde</strong> bir
+                    </span>
+                    {% endif %}
+
+                    {% if r.next_due_date %}
+                    <span class="routine-meta-item">
+                        ⏰ Sonraki: <strong>{{ r.next_due_date }}</strong>
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- DAYS CHIP -->
+            {% if r.days_left is not none %}
+            <div class="days-chip">
+                <span class="num
+                    {% if r.days_left < 0 %}day-danger
+                    {% elif r.days_left <= 3 %}day-warn
+                    {% else %}day-ok{% endif %}">
+                    {{ r.days_left | abs }}
+                </span>
+                <span class="lbl">
+                    {% if r.days_left < 0 %}gün geçti
+                    {% elif r.days_left == 0 %}bugün!
+                    {% else %}gün kaldı{% endif %}
+                </span>
+                {% if r.days_left < 0 %}
+                    <span class="badge badge-danger" style="margin-top:.3rem">Gecikti</span>
+                {% elif r.days_left == 0 %}
+                    <span class="badge badge-warn" style="margin-top:.3rem">Bugün</span>
+                {% elif r.days_left <= 3 %}
+                    <span class="badge badge-warn" style="margin-top:.3rem">Yakın</span>
+                {% else %}
+                    <span class="badge badge-ok" style="margin-top:.3rem">Tamam</span>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="routine-actions">
+                {% if r.item_type == 'Mama' %}
+                <form method="POST" action="{{ url_for('edit_routine', r_id=r.id) }}">
+                    <input type="hidden" name="pet_id" value="{{ pet.id }}">
+                    <input type="hidden" name="is_fed" value="1">
+                    <button type="submit" class="btn btn-sage btn-sm">🥣 Mama Verdim</button>
+                </form>
+                {% endif %}
+
+                <label for="rt-toggle-{{ r.id }}" class="btn btn-ghost btn-sm" style="cursor:pointer">
+                    ✏️ Düzenle
+                </label>
+                <form method="POST" action="{{ url_for('delete_routine', r_id=r.id) }}"
+                    onsubmit="return confirm('Bu kayıt silinecek, emin misiniz?')">
+                    <input type="hidden" name="pet_id" value="{{ pet.id }}">
+                    <button type="submit" class="btn btn-danger btn-sm">🗑 Sil</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- EDIT FORM — CSS toggle ile açılır -->
+        <div class="routine-edit-wrapper">
+            <form method="POST" action="{{ url_for('edit_routine', r_id=r.id) }}">
+                <input type="hidden" name="pet_id" value="{{ pet.id }}">
+
+                <div class="form-grid">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Tür</label>
+                        <select name="item_type" required>
+                            {% for opt in ['Mama','Veteriner','Aşı','Tırnak','Banyo','İlaç','Diğer'] %}
+                            <option value="{{ opt }}" {% if r.item_type == opt %}selected{% endif %}>
+                                {{ opt }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Toplam Miktar (g)</label>
+                        <input type="number" name="total_amount"
+                               value="{{ r.total_amount or '' }}" min="1">
+                        <p class="field-hint">Sadece mama için.</p>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Son İşlem Tarihi</label>
+                        <input type="date" name="last_action_date"
+                               value="{{ r.last_action_date[:10] if r.last_action_date else '' }}">
+                        <p class="field-hint">Boş bırakılırsa bugün kabul edilir.</p>
+                    </div>
+                </div>
+
+                <div class="form-grid" style="margin-top:1rem">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Tekrar Aralığı (gün)</label>
+                        <input type="number" name="interval_days"
+                               value="{{ r.interval_days or '' }}" min="1">
+                        <p class="field-hint">Girilirse sonraki tarih otomatik hesaplanır.</p>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Sonraki Tarih</label>
+                        <input type="text" disabled
+                               placeholder="{{ r.next_due_date if r.next_due_date else 'Otomatik hesaplanır' }}"
+                               style="opacity:.5;cursor:not-allowed">
+                        <p class="field-hint">Aralık girilince otomatik belirlenir.</p>
+                    </div>
+
+                    <div style="display:flex;align-items:flex-end;gap:.5rem">
+                        <button type="submit" class="btn btn-primary btn-sm">Kaydet</button>
+                        <label for="rt-toggle-{{ r.id }}"
+                               class="btn btn-ghost btn-sm"
+                               style="cursor:pointer">İptal</label>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="empty-state card">
+    <div class="empty-icon">📋</div>
+    <p>Bu hayvan için henüz kayıt yok. Yukarıdan ekleyin!</p>
+</div>
+{% endif %}
+
+{% endblock %}

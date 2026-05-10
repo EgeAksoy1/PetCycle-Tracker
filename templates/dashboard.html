@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}Panel — PetCycle{% endblock %}
+
+{% block extra_styles %}
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: #fff;
+    border: 1px solid var(--warm);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+}
+
+.stat-card .stat-label {
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.stat-card .stat-value {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--earth);
+    line-height: 1;
+}
+
+.stat-card .stat-sub {
+    font-size: .78rem;
+    color: var(--muted);
+}
+
+/* Section title */
+.section-title {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--bark);
+    margin-bottom: 1rem;
+    padding-bottom: .5rem;
+    border-bottom: 2px solid var(--warm);
+}
+
+/* Item list */
+.item-list {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+}
+
+.item-row {
+    background: #fff;
+    border: 1px solid var(--warm);
+    border-radius: var(--radius-lg);
+    padding: 1.1rem 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    box-shadow: var(--shadow);
+    transition: box-shadow .18s;
+}
+
+.item-row:hover { box-shadow: var(--shadow-lg); }
+
+.item-row-left {
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+}
+
+.item-row-type {
+    font-size: .7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+}
+
+.item-row-name {
+    font-weight: 500;
+    color: var(--bark);
+    font-size: .95rem;
+}
+
+.item-row-detail {
+    font-size: .82rem;
+    color: var(--muted);
+}
+
+.days-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .25rem;
+}
+
+.days-number {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.days-label {
+    font-size: .7rem;
+    color: var(--muted);
+    text-align: right;
+}
+
+.day-ok      { color: var(--sage); }
+.day-warn    { color: var(--clay); }
+.day-danger  { color: var(--blush); }
+
+/* Welcome banner */
+.welcome-banner {
+    background: linear-gradient(120deg, var(--earth) 0%, var(--bark) 100%);
+    border-radius: var(--radius-lg);
+    padding: 2rem 2.5rem;
+    margin-bottom: 2rem;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.welcome-banner h1 {
+    font-family: var(--font-display);
+    font-size: 1.7rem;
+    font-weight: 600;
+    letter-spacing: -.3px;
+}
+
+.welcome-banner p {
+    opacity: .75;
+    font-size: .9rem;
+    margin-top: .3rem;
+}
+
+.welcome-banner .banner-icon {
+    font-size: 3.5rem;
+    opacity: .3;
+}
+
+.section-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+@media (max-width: 700px) {
+    .section-row { grid-template-columns: 1fr; }
+    .welcome-banner { flex-direction: column; align-items: flex-start; }
+}
+{% endblock %}
+
+{% block content %}
+
+<!-- WELCOME -->
+<div class="welcome-banner">
+    <div>
+        <h1>Merhaba, {{ username }} 👋</h1>
+        <p>Bugün evcil dostlarınızın durumu özeti aşağıda.</p>
+    </div>
+    <div class="banner-icon">🐾</div>
+</div>
+
+<!-- STATS -->
+{% set pet_count = pets | length %}
+{% set food_items = items | selectattr('item_type', 'equalto', 'Mama') | list %}
+{% set routine_items = items | rejectattr('item_type', 'equalto', 'Mama') | list %}
+{% set urgent = items | selectattr('days_left', 'defined') | selectattr('days_left', 'ne', none) | selectattr('days_left', 'le', 3) | list %}
+
+<div class="stats-row">
+    <div class="stat-card">
+        <span class="stat-label">Hayvan sayısı</span>
+        <span class="stat-value">{{ pet_count }}</span>
+        <span class="stat-sub">kayıtlı evcil hayvan</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Mama takibi</span>
+        <span class="stat-value">{{ food_items | length }}</span>
+        <span class="stat-sub">aktif mama kaydı</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Rutin</span>
+        <span class="stat-value">{{ routine_items | length }}</span>
+        <span class="stat-sub">planlı rutin</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Acil</span>
+        <span class="stat-value" style="color:var(--blush)">{{ urgent | length }}</span>
+        <span class="stat-sub">3 gün içinde gereken işlem</span>
+    </div>
+</div>
+
+<!-- TWO COLUMN -->
+<div class="section-row">
+
+    <!-- FOOD -->
+    <div>
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="section-title" style="margin-bottom:0;border:none">Mama Durumu</h2>
+            <a href="{{ url_for('pets') }}" class="btn btn-ghost btn-sm">Yönet →</a>
+        </div>
+        <hr class="divider">
+
+        {% set food_items = items | selectattr('item_type', 'equalto', 'Mama') | list %}
+        {% if food_items %}
+        <div class="item-list">
+            {% for item in food_items %}
+            {% set days = item.food_remaining_days %}
+            <div class="item-row">
+                <div class="item-row-left">
+                    <span class="item-row-type">{{ item.item_type }}</span>
+                    <span class="item-row-name">{{ item.pet_name }}</span>
+                    <span class="item-row-detail">
+                        Kalan: {{ item.calculated_remaining_amount }} g
+                    </span>
+                </div>
+                <div class="days-pill">
+                    <span class="days-number {% if days <= 2 %}day-danger{% elif days <= 7 %}day-warn{% else %}day-ok{% endif %}">
+                        {{ days }}
+                    </span>
+                    <span class="days-label">gün kaldı</span>
+                    {% if days <= 2 %}
+                        <span class="badge badge-danger">Acil!</span>
+                    {% elif days <= 7 %}
+                        <span class="badge badge-warn">Az kaldı</span>
+                    {% else %}
+                        <span class="badge badge-ok">İyi</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">🥣</div>
+            <p>Henüz mama kaydı yok.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ROUTINES -->
+    <div>
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="section-title" style="margin-bottom:0;border:none">Yaklaşan Rutinler</h2>
+            <a href="{{ url_for('pets') }}" class="btn btn-ghost btn-sm">Yönet →</a>
+        </div>
+        <hr class="divider">
+
+        {% set routine_items = items | rejectattr('item_type', 'equalto', 'Mama') | list %}
+        {% if routine_items %}
+        <div class="item-list">
+            {% for item in routine_items %}
+            {% set days = item.days_left %}
+            <div class="item-row">
+                <div class="item-row-left">
+                    <span class="item-row-type">{{ item.item_type }}</span>
+                    <span class="item-row-name">{{ item.pet_name }}</span>
+                    {% if item.next_due_date %}
+                    <span class="item-row-detail">📅 {{ item.next_due_date }}</span>
+                    {% endif %}
+                </div>
+                <div class="days-pill">
+                    {% if days is not none %}
+                    <span class="days-number {% if days < 0 %}day-danger{% elif days <= 3 %}day-warn{% else %}day-ok{% endif %}">
+                        {% if days < 0 %}{{ days | abs }}{% else %}{{ days }}{% endif %}
+                    </span>
+                    <span class="days-label">
+                        {% if days < 0 %}gün geçti{% else %}gün kaldı{% endif %}
+                    </span>
+                    {% if days < 0 %}
+                        <span class="badge badge-danger">Gecikti!</span>
+                    {% elif days <= 3 %}
+                        <span class="badge badge-warn">Yaklaşıyor</span>
+                    {% else %}
+                        <span class="badge badge-ok">Tamam</span>
+                    {% endif %}
+                    {% else %}
+                    <span class="badge badge-sage">—</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <p>Henüz rutin kaydı yok.</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

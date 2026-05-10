@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}Hayvanlarım — PetCycle{% endblock %}
+
+{% block extra_styles %}
+.pets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2.5rem;
+}
+
+.pet-card {
+    background: #fff;
+    border: 1px solid var(--warm);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transition: box-shadow .2s;
+}
+
+.pet-card:hover { box-shadow: var(--shadow-lg); }
+
+.pet-card-header {
+    background: linear-gradient(120deg, var(--earth), var(--bark));
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.pet-avatar {
+    width: 48px;
+    height: 48px;
+    background: rgba(255,255,255,.18);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.pet-card-header h3 {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: -.3px;
+}
+
+.pet-card-header .pet-species {
+    font-size: .8rem;
+    color: rgba(255,255,255,.65);
+    margin-top: .15rem;
+}
+
+.pet-card-body {
+    padding: 1.25rem 1.5rem;
+}
+
+.pet-meta {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .85rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+}
+
+.pet-meta strong {
+    color: var(--earth);
+    font-size: 1rem;
+}
+
+.pet-card-actions {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+
+/* Add pet form */
+.add-section {
+    background: #fff;
+    border: 1px solid var(--warm);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+.add-section h2 {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--bark);
+    margin-bottom: 1.5rem;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+@media (max-width: 700px) {
+    .form-row { grid-template-columns: 1fr; }
+}
+
+/* Edit form inline */
+.edit-form-wrapper {
+    display: none;
+    background: var(--cream);
+    border-top: 1px solid var(--warm);
+    padding: 1.25rem 1.5rem;
+}
+
+/* Checkbox trick — pure CSS toggle */
+.toggle-edit-cb { display: none; }
+
+.toggle-edit-cb:checked ~ .edit-form-wrapper {
+    display: block;
+}
+
+.toggle-edit-label {
+    cursor: pointer;
+}
+
+/* Species emoji map */
+.species-icon { font-size: 1.4rem; }
+{% endblock %}
+
+{% block content %}
+
+<div class="page-heading">
+    <h1>Hayvanlarım</h1>
+    <p>Evcil hayvanlarınızı ekleyin, düzenleyin ve rutin takibine geçin.</p>
+</div>
+
+<!-- ADD PET FORM -->
+<div class="add-section">
+    <h2>➕ Yeni Hayvan Ekle</h2>
+    <form method="POST" action="{{ url_for('pets') }}">
+        <div class="form-row">
+            <div class="form-group" style="margin-bottom:0">
+                <label for="name">İsim</label>
+                <input type="text" id="name" name="name" placeholder="Pamuk" required>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+                <label for="species">Tür</label>
+                <input type="text" id="species" name="species" placeholder="Kedi, Köpek…" required>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+                <label for="daily_food_gram">Günlük Mama (g)</label>
+                <input type="number" id="daily_food_gram" name="daily_food_gram" placeholder="150" min="1" required>
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary">Ekle</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- PET LIST -->
+{% if pets %}
+<div class="pets-grid">
+    {% for pet in pets %}
+    {% set species_lower = pet.species | lower %}
+    {% if 'kedi' in species_lower %}
+        {% set icon = '🐱' %}
+    {% elif 'köpek' in species_lower or 'kopek' in species_lower %}
+        {% set icon = '🐶' %}
+    {% elif 'kuş' in species_lower or 'kus' in species_lower %}
+        {% set icon = '🐦' %}
+    {% elif 'balık' in species_lower or 'balik' in species_lower %}
+        {% set icon = '🐟' %}
+    {% elif 'tavşan' in species_lower or 'tavsan' in species_lower %}
+        {% set icon = '🐰' %}
+    {% else %}
+        {% set icon = '🐾' %}
+    {% endif %}
+
+    <!-- Pure CSS toggle trick için hidden checkbox -->
+    <div class="pet-card">
+        <input type="checkbox" class="toggle-edit-cb" id="edit-toggle-{{ pet.id }}">
+
+        <div class="pet-card-header">
+            <div class="pet-avatar">{{ icon }}</div>
+            <div>
+                <h3>{{ pet.name }}</h3>
+                <div class="pet-species">{{ pet.species }}</div>
+            </div>
+        </div>
+
+        <div class="pet-card-body">
+            <div class="pet-meta">
+                🥣 Günlük mama: <strong>{{ pet.daily_food_gram }} g</strong>
+            </div>
+
+            <div class="pet-card-actions">
+                <a href="{{ url_for('get_routines', pet_id=pet.id) }}" class="btn btn-sage btn-sm">
+                    📋 Rutinler
+                </a>
+                <label for="edit-toggle-{{ pet.id }}" class="btn btn-ghost btn-sm toggle-edit-label">
+                    ✏️ Düzenle
+                </label>
+                <form method="POST" action="{{ url_for('delete_pet', pet_id=pet.id) }}"
+                      onsubmit="return confirm('{{ pet.name }} silinecek, emin misiniz?')">
+                    <button type="submit" class="btn btn-danger btn-sm">🗑 Sil</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- EDIT FORM — CSS toggle ile açılır -->
+        <div class="edit-form-wrapper">
+            <form method="POST" action="{{ url_for('edit_pet', pet_id=pet.id) }}">
+                <div class="form-row">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>İsim</label>
+                        <input type="text" name="name" value="{{ pet.name }}" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Tür</label>
+                        <input type="text" name="species" value="{{ pet.species }}" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Günlük Mama (g)</label>
+                        <input type="number" name="daily_food_gram" value="{{ pet.daily_food_gram }}" min="1" required>
+                    </div>
+                    <div style="display:flex;gap:.5rem;align-items:flex-end">
+                        <button type="submit" class="btn btn-primary btn-sm">Kaydet</button>
+                        <label for="edit-toggle-{{ pet.id }}" class="btn btn-ghost btn-sm toggle-edit-label">İptal</label>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="empty-state card">
+    <div class="empty-icon">🐾</div>
+    <p>Henüz kayıtlı hayvanınız yok. Yukarıdan ekleyin!</p>
+</div>
+{% endif %}
+
+{% endblock %}
