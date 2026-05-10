@@ -185,7 +185,6 @@ def pets():
         conn.close()
         return render_template('pets.html', pets=rows)
 
-    # POST – yeni evcil hayvan ekle
     name = request.form.get('name', '').strip()
     species = request.form.get('species', '').strip()
 
@@ -255,7 +254,6 @@ def delete_pet(pet_id):
     user_id = session['user_id']
     conn = get_db_connection()
     try:
-        # Önce bağlı rutinleri sil
         conn.execute('''
             DELETE FROM inventory_and_routines WHERE pet_id = ?
             AND pet_id IN (SELECT id FROM pets WHERE user_id = ?)
@@ -323,13 +321,17 @@ def add_routine():
     item_type = request.form.get('item_type', '').strip()
     total_amount = request.form.get('total_amount') or None
     interval_days = request.form.get('interval_days') or None
-    last_action_date = request.form.get('last_action_date') or None  # boşsa None → DB default alır
+
+    if total_amount is None or interval_days is None:
+        flash('hata')
+        return redirect(url_for('pets'))
+    
+    last_action_date = request.form.get('last_action_date') or None  
 
     if not pet_id or not item_type:
         flash('Tür alanı zorunludur!', 'danger')
         return redirect(request.referrer or url_for('dashboard'))
 
-    # next_due_date otomatik hesapla
     next_due_date = None
     if interval_days:
         try:
