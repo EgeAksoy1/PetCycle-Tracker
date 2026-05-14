@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 import sqlite3
 from functools import wraps
 from datetime import date, datetime, timedelta
@@ -124,14 +124,17 @@ def logout():
 
 # ─── DASHBOARD ───────────────────────────────────────────────────────────────
 
-@app.route('/dashboard')
-@login_required
-def dashboard():
+def get_pets():
     user_id = session['user_id']
-    username = session['username']
 
     conn = get_db_connection()
     pets = conn.execute('SELECT * FROM pets WHERE user_id = ?', (user_id,)).fetchall()
+    conn.close()
+    return pets
+
+def get_items():
+    user_id = session['user_id']
+    conn = get_db_connection()
 
     items = conn.execute('''
         SELECT ir.*, p.name as pet_name, p.daily_food_gram
@@ -168,7 +171,14 @@ def dashboard():
             item_data['days_left'] = (target_date - today).days
 
         processed_items.append(item_data)
+    return processed_items
 
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    pets = get_pets()
+    username = session['username']
+    processed_items = get_items()
     return render_template('dashboard.html', username=username, pets=pets, items=processed_items)
 
 # ─── PETS ────────────────────────────────────────────────────────────────────
@@ -214,7 +224,7 @@ def pets():
 @app.route('/pets/<int:pet_id>/edit', methods=['POST'])
 @login_required
 def edit_pet(pet_id):
-    """PUT yerine POST + gizli _method alanı kullanılır."""
+
     user_id = session['user_id']
     name = request.form.get('name', '').strip()
     species = request.form.get('species', '').strip()
@@ -322,7 +332,7 @@ def add_routine():
     total_amount = request.form.get('total_amount') or None
     interval_days = request.form.get('interval_days') or None
 
-    if item_type == 'Mama' or item_type == 'İlaç':
+    if item_type == 'Mama':
         if total_amount is None or interval_days is None:
             flash('hata')
             return redirect(url_for('pets'))
