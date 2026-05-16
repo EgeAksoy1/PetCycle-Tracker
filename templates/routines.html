@@ -342,6 +342,14 @@
                 </form>
                 {% endif %}
 
+                {% if r.item_type != 'Mama' %}
+                <form method="POST" action="{{ url_for('edit_routine', r_id=r.id) }}">
+                    <input type="hidden" name="pet_id" value="{{ pet.id }}">
+                    <input type="hidden" name="is_done" value="1">
+                    <button type="submit" class="btn btn-sage btn-sm">Tamamlandı</button>
+                </form>
+                {% endif %}
+
                 <label for="rt-toggle-{{ r.id }}" class="btn btn-ghost btn-sm" style="cursor:pointer">
                     ✏️ Düzenle
                 </label>

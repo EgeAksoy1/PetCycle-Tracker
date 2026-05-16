@@ -391,6 +391,7 @@ def edit_routine(r_id):
     user_id = session['user_id']
     pet_id  = request.form.get('pet_id')
     is_fed  = request.form.get('is_fed')
+    is_done  = request.form.get('is_done')
 
     if not pet_id:
         flash('pet_id bulunamadı!', 'danger')
@@ -425,6 +426,23 @@ def edit_routine(r_id):
             total_amount     = new_total
             last_action_date = routine['last_action_date']
             next_due_date    = routine['next_due_date']
+
+        elif is_done:
+            item_type        = routine['item_type'] 
+            interval_days = routine['interval_days']
+            total_amount     = request.form.get('total_amount') or None
+            last_action_date = date.today() 
+
+            next_due_date = None
+            if interval_days:
+                try:
+                    interval_days = int(interval_days)
+                    next_due_date = (last_action_date + timedelta(days=interval_days)).strftime('%Y-%m-%d')
+                except (ValueError, TypeError):
+                    flash('Geçersiz aralık değeri!', 'danger')
+                    return redirect(url_for('get_routines', pet_id=pet_id))
+            last_action_date_str = last_action_date.strftime('%Y-%m-%d')
+            last_action_date = last_action_date_str
 
         else:
             item_type        = request.form.get('item_type', '').strip()
