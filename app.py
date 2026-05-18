@@ -62,6 +62,41 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# ─── BUSINESS LOGIC ──────────────────────────────────────────────────────────
+
+def calculate_food_remaining(total_amount, daily_food_gram, last_action_date_str, today=None):
+    if today is None:
+        today = date.today()
+    action_date = datetime.strptime(last_action_date_str[:10], '%Y-%m-%d').date()
+    days_passed = max((today - action_date).days, 0)
+    consumed = days_passed * daily_food_gram
+    remaining_amount = max(total_amount - consumed, 0)
+    remaining_days = remaining_amount // daily_food_gram if daily_food_gram > 0 else 0
+    return {
+        'calculated_remaining_amount': remaining_amount,
+        'food_remaining_days': remaining_days
+    }
+
+def calculate_next_due_date(last_action_date_str, interval_days):
+    if not interval_days:
+        return None
+    if last_action_date_str:
+        base_date = datetime.strptime(last_action_date_str[:10], '%Y-%m-%d').date()
+    else:
+        base_date = date.today()
+    return (base_date + timedelta(days=int(interval_days))).strftime('%Y-%m-%d')
+
+def calculate_days_left(next_due_date_str, today=None):
+    if today is None:
+        today = date.today()
+    if not next_due_date_str:
+        return None
+    target = datetime.strptime(next_due_date_str[:10], '%Y-%m-%d').date()
+    return (target - today).days
+
+def calculate_fed(total_amount, daily_food_gram):
+    return max((total_amount or 0) - daily_food_gram, 0)
+
 # ─── AUTH ────────────────────────────────────────────────────────────────────
 
 @app.route('/')
@@ -126,7 +161,6 @@ def logout():
 
 def get_pets():
     user_id = session['user_id']
-
     conn = get_db_connection()
     pets = conn.execute('SELECT * FROM pets WHERE user_id = ?', (user_id,)).fetchall()
     conn.close()
@@ -135,42 +169,30 @@ def get_pets():
 def get_items():
     user_id = session['user_id']
     conn = get_db_connection()
-
     items = conn.execute('''
         SELECT ir.*, p.name as pet_name, p.daily_food_gram
         FROM inventory_and_routines ir
         JOIN pets p ON ir.pet_id = p.id
         WHERE p.user_id = ?
     ''', (user_id,)).fetchall()
-
     conn.close()
 
-    today = date.today()
     processed_items = []
-
     for item in items:
         item_data = dict(item)
-
         if item_data['item_type'] == 'Mama' and item_data['total_amount'] is not None:
-            action_date_str = item_data['last_action_date'][:10]
-            action_date = datetime.strptime(action_date_str, '%Y-%m-%d').date()
-
-            days_passed = max((today - action_date).days, 0)
-            consumed_amount = days_passed * item_data['daily_food_gram']
-            remaining_amount = max(item_data['total_amount'] - consumed_amount, 0)
-
-            daily = item_data['daily_food_gram']
-            remaining_days = remaining_amount // daily if daily > 0 else 0
-
-            item_data['calculated_remaining_amount'] = remaining_amount
-            item_data['food_remaining_days'] = remaining_days
+            result = calculate_food_remaining(
+                item_data['total_amount'],
+                item_data['daily_food_gram'],
+                item_data['last_action_date']
+            )
+            item_data['calculated_remaining_amount'] = result['calculated_remaining_amount']
+            item_data['food_remaining_days'] = result['food_remaining_days']
             item_data['days_left'] = None
-
         elif item_data['next_due_date']:
-            target_date = datetime.strptime(item_data['next_due_date'], '%Y-%m-%d').date()
-            item_data['days_left'] = (target_date - today).days
-
+            item_data['days_left'] = calculate_days_left(item_data['next_due_date'])
         processed_items.append(item_data)
+
     return processed_items
 
 @app.route('/dashboard')
@@ -189,7 +211,6 @@ def pets():
     user_id = session['user_id']
 
     if request.method == 'GET':
-
         conn = get_db_connection()
         rows = conn.execute('SELECT * FROM pets WHERE user_id = ?', (user_id,)).fetchall()
         conn.close()
@@ -224,7 +245,6 @@ def pets():
 @app.route('/pets/<int:pet_id>/edit', methods=['POST'])
 @login_required
 def edit_pet(pet_id):
-
     user_id = session['user_id']
     name = request.form.get('name', '').strip()
     species = request.form.get('species', '').strip()
@@ -288,9 +308,7 @@ def delete_pet(pet_id):
 @app.route('/routines/<int:pet_id>', methods=['GET'])
 @login_required
 def get_routines(pet_id):
-
     user_id = session['user_id']
-
     conn = get_db_connection()
     try:
         pet = conn.execute(
@@ -308,15 +326,10 @@ def get_routines(pet_id):
             WHERE ir.pet_id = ? AND p.user_id = ?
         ''', (pet_id, user_id)).fetchall()
 
-        today = date.today()
         processed = []
         for r in routines:
             rd = dict(r)
-            if rd['next_due_date']:
-                target = datetime.strptime(rd['next_due_date'], '%Y-%m-%d').date()
-                rd['days_left'] = (target - today).days
-            else:
-                rd['days_left'] = None
+            rd['days_left'] = calculate_days_left(rd['next_due_date'])
             processed.append(rd)
 
         return render_template('routines.html', pet=pet, routines=processed)
@@ -331,34 +344,19 @@ def add_routine():
     item_type = request.form.get('item_type', '').strip()
     total_amount = request.form.get('total_amount') or None
     interval_days = request.form.get('interval_days') or None
-
-    if item_type == 'Mama':
-        if total_amount is None or interval_days is None:
-            flash('hata')
-            return redirect(url_for('pets'))
-    
-    last_action_date = request.form.get('last_action_date') or None  
+    last_action_date = request.form.get('last_action_date') or None
 
     if not pet_id or not item_type:
         flash('Tür alanı zorunludur!', 'danger')
         return redirect(request.referrer or url_for('dashboard'))
 
-    next_due_date = None
+    next_due_date = calculate_next_due_date(last_action_date, interval_days)
+
     if interval_days:
-        try:
-            interval_days = int(interval_days)
-            if last_action_date:
-                base_date = datetime.strptime(last_action_date, '%Y-%m-%d').date()
-            else:
-                base_date = date.today() 
-            next_due_date = (base_date + __import__('datetime').timedelta(days=interval_days)).strftime('%Y-%m-%d')
-        except (ValueError, TypeError):
-            flash('Geçersiz aralık değeri!', 'danger')
-            return redirect(url_for('get_routines', pet_id=pet_id))
-    
-    
+        interval_days = int(interval_days)
+
     if last_action_date is None:
-        last_action_date = date.today()
+        last_action_date = date.today().strftime('%Y-%m-%d')
 
     conn = get_db_connection()
     try:
@@ -391,7 +389,7 @@ def edit_routine(r_id):
     user_id = session['user_id']
     pet_id  = request.form.get('pet_id')
     is_fed  = request.form.get('is_fed')
-    is_done  = request.form.get('is_done')
+    is_done = request.form.get('is_done')
 
     if not pet_id:
         flash('pet_id bulunamadı!', 'danger')
@@ -412,56 +410,36 @@ def edit_routine(r_id):
             return redirect(url_for('get_routines', pet_id=pet_id))
 
         if is_fed:
-            item_type     = routine['item_type']
-            interval_days = routine['interval_days']
-
             pet_row = conn.execute(
                 'SELECT daily_food_gram FROM pets WHERE id = ?',
                 (routine['pet_id'],)
             ).fetchone()
             daily_gram = pet_row['daily_food_gram'] if pet_row else 0
 
-            old_total        = routine['total_amount'] or 0
-            new_total        = max(old_total - daily_gram, 0)
-            total_amount     = new_total
-            last_action_date = routine['last_action_date']
-            next_due_date    = routine['next_due_date']
+            item_type        = routine['item_type']
+            interval_days    = routine['interval_days']
+            total_amount     = calculate_fed(routine['total_amount'], daily_gram)
+            today            = date.today()
+            last_action_date = today.strftime('%Y-%m-%d')
+            next_due_date    = calculate_next_due_date(last_action_date, interval_days)
 
         elif is_done:
-            item_type        = routine['item_type'] 
-            interval_days = routine['interval_days']
-            total_amount     = request.form.get('total_amount') or None
-            last_action_date = date.today() 
-
-            next_due_date = None
-            if interval_days:
-                try:
-                    interval_days = int(interval_days)
-                    next_due_date = (last_action_date + timedelta(days=interval_days)).strftime('%Y-%m-%d')
-                except (ValueError, TypeError):
-                    flash('Geçersiz aralık değeri!', 'danger')
-                    return redirect(url_for('get_routines', pet_id=pet_id))
-            last_action_date_str = last_action_date.strftime('%Y-%m-%d')
-            last_action_date = last_action_date_str
+            today            = date.today()
+            item_type        = routine['item_type']
+            interval_days    = routine['interval_days']
+            total_amount     = routine['total_amount']
+            last_action_date = today.strftime('%Y-%m-%d')
+            next_due_date    = calculate_next_due_date(last_action_date, interval_days)
 
         else:
             item_type        = request.form.get('item_type', '').strip()
             total_amount     = request.form.get('total_amount') or None
             interval_days    = request.form.get('interval_days') or None
             last_action_date = request.form.get('last_action_date') or None
+            next_due_date    = calculate_next_due_date(last_action_date, interval_days)
 
-            next_due_date = None
             if interval_days:
-                try:
-                    interval_days = int(interval_days)
-                    base_date = (
-                        datetime.strptime(last_action_date, '%Y-%m-%d').date()
-                        if last_action_date else date.today()
-                    )
-                    next_due_date = (base_date + timedelta(days=interval_days)).strftime('%Y-%m-%d')
-                except (ValueError, TypeError):
-                    flash('Geçersiz aralık değeri!', 'danger')
-                    return redirect(url_for('get_routines', pet_id=pet_id))
+                interval_days = int(interval_days)
 
         cursor = conn.execute('''
             UPDATE inventory_and_routines
