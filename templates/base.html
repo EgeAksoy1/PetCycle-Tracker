@@ -375,12 +375,12 @@
     {% if session.user_id %}
     <nav>
         <div class="nav-inner">
-            <a href="{{ url_for('dashboard') }}" class="nav-brand">Pet<span>Cycle</span></a>
+            <a href="{{ url_for('routes.dashboard') }}" class="nav-brand">Pet<span>Cycle</span></a>
             <ul class="nav-links">
-                <li><a href="{{ url_for('dashboard') }}" {% if request.endpoint == 'dashboard' %}class="active"{% endif %}>Panel</a></li>
-                <li><a href="{{ url_for('pets') }}" {% if request.endpoint == 'pets' %}class="active"{% endif %}>Hayvanlarım</a></li>
+                <li><a href="{{ url_for('routes.dashboard') }}" {% if request.endpoint == 'dashboard' %}class="active"{% endif %}>Panel</a></li>
+                <li><a href="{{ url_for('routes.pets') }}" {% if request.endpoint == 'pets' %}class="active"{% endif %}>Hayvanlarım</a></li>
                 <li><span class="nav-user">👤 {{ session.username }}</span></li>
-                <li><a href="{{ url_for('logout') }}" class="btn-logout">Çıkış</a></li>
+                <li><a href="{{ url_for('auth.logout') }}" class="btn-logout">Çıkış</a></li>
             </ul>
         </div>
     </nav>

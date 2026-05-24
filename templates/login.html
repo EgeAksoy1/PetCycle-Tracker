@@ -91,7 +91,7 @@ main {
     <div class="auth-card">
         <h2>Hesabınıza giriş yapın</h2>
 
-        <form method="POST" action="{{ url_for('login') }}">
+        <form method="POST" action="{{ url_for('auth.login') }}">
             <div class="form-group">
                 <label for="username">Kullanıcı Adı</label>
                 <input
@@ -124,7 +124,7 @@ main {
     </div>
 
     <div class="auth-footer">
-        Hesabınız yok mu? <a href="{{ url_for('register') }}">Kayıt ol</a>
+        Hesabınız yok mu? <a href="{{ url_for('auth.register') }}">Kayıt ol</a>
     </div>
 </div>
 {% endblock %}

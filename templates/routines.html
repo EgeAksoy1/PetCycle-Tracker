@@ -196,13 +196,13 @@
         <h1>🐾 {{ pet.name }}</h1>
         <p>{{ pet.species }} &mdash; Günlük {{ pet.daily_food_gram }} g mama</p>
     </div>
-    <a href="{{ url_for('pets') }}" class="back-btn">← Hayvanlara Dön</a>
+    <a href="{{ url_for('routes.pets') }}" class="back-btn">← Hayvanlara Dön</a>
 </div>
 
 <!-- ADD FORM -->
 <div class="add-section">
     <h2>➕ Yeni Kayıt Ekle</h2>
-    <form method="POST" action="{{ url_for('add_routine') }}">
+    <form method="POST" action="{{ url_for('routes.add_routine') }}">
         <input type="hidden" name="pet_id" value="{{ pet.id }}">
 
         <div class="form-grid">
@@ -335,7 +335,7 @@
 
             <div class="routine-actions">
                 {% if r.item_type == 'Mama' %}
-                <form method="POST" action="{{ url_for('edit_routine', r_id=r.id) }}">
+                <form method="POST" action="{{ url_for('routes.edit_routine', r_id=r.id) }}">
                     <input type="hidden" name="pet_id" value="{{ pet.id }}">
                     <input type="hidden" name="is_fed" value="1">
                     <button type="submit" class="btn btn-sage btn-sm">🥣 Mama Verdim</button>
@@ -343,7 +343,7 @@
                 {% endif %}
 
                 {% if r.item_type != 'Mama' %}
-                <form method="POST" action="{{ url_for('edit_routine', r_id=r.id) }}">
+                <form method="POST" action="{{ url_for('routes.edit_routine', r_id=r.id) }}">
                     <input type="hidden" name="pet_id" value="{{ pet.id }}">
                     <input type="hidden" name="is_done" value="1">
                     <button type="submit" class="btn btn-sage btn-sm">Tamamlandı</button>
@@ -353,7 +353,7 @@
                 <label for="rt-toggle-{{ r.id }}" class="btn btn-ghost btn-sm" style="cursor:pointer">
                     ✏️ Düzenle
                 </label>
-                <form method="POST" action="{{ url_for('delete_routine', r_id=r.id) }}"
+                <form method="POST" action="{{ url_for('routes.delete_routine', r_id=r.id) }}"
                     onsubmit="return confirm('Bu kayıt silinecek, emin misiniz?')">
                     <input type="hidden" name="pet_id" value="{{ pet.id }}">
                     <button type="submit" class="btn btn-danger btn-sm">🗑 Sil</button>
@@ -363,7 +363,7 @@
 
         <!-- EDIT FORM — CSS toggle ile açılır -->
         <div class="routine-edit-wrapper">
-            <form method="POST" action="{{ url_for('edit_routine', r_id=r.id) }}">
+            <form method="POST" action="{{ url_for('routes.edit_routine', r_id=r.id) }}">
                 <input type="hidden" name="pet_id" value="{{ pet.id }}">
 
                 <div class="form-grid">

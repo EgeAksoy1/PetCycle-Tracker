@@ -140,7 +140,7 @@
 <!-- ADD PET FORM -->
 <div class="add-section">
     <h2>➕ Yeni Hayvan Ekle</h2>
-    <form method="POST" action="{{ url_for('pets') }}">
+    <form method="POST" action="{{ url_for('routes.pets') }}">
         <div class="form-row">
             <div class="form-group" style="margin-bottom:0">
                 <label for="name">İsim</label>
@@ -198,13 +198,13 @@
             </div>
 
             <div class="pet-card-actions">
-                <a href="{{ url_for('get_routines', pet_id=pet.id) }}" class="btn btn-sage btn-sm">
+                <a href="{{ url_for('routes.get_routines', pet_id=pet.id) }}" class="btn btn-sage btn-sm">
                     📋 Rutinler
                 </a>
                 <label for="edit-toggle-{{ pet.id }}" class="btn btn-ghost btn-sm toggle-edit-label">
                     ✏️ Düzenle
                 </label>
-                <form method="POST" action="{{ url_for('delete_pet', pet_id=pet.id) }}"
+                <form method="POST" action="{{ url_for('routes.delete_pet', pet_id=pet.id) }}"
                       onsubmit="return confirm('{{ pet.name }} silinecek, emin misiniz?')">
                     <button type="submit" class="btn btn-danger btn-sm">🗑 Sil</button>
                 </form>
@@ -213,7 +213,7 @@
 
         <!-- EDIT FORM — CSS toggle ile açılır -->
         <div class="edit-form-wrapper">
-            <form method="POST" action="{{ url_for('edit_pet', pet_id=pet.id) }}">
+            <form method="POST" action="{{ url_for('routes.edit_pet', pet_id=pet.id) }}">
                 <div class="form-row">
                     <div class="form-group" style="margin-bottom:0">
                         <label>İsim</label>
