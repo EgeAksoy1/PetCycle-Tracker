@@ -1,6 +1,6 @@
 import pytest
 from datetime import date, timedelta
-from app import (
+from business_logic import (
     calculate_food_remaining,
     calculate_next_due_date,
     calculate_days_left,
